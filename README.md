@@ -80,6 +80,8 @@ Toutes les routes acceptent **GET, POST, PATCH, PUT**. Réponses JSON avec `Cach
 | `GET /api/news/world` | Actualités monde (RSS) | 5 min |
 | `GET /api/news/tech` | Actualités tech (RSS) | 5 min |
 | `GET /api/infra/datacenters` | Datacenters cloud (liste statique) | — |
+| `POST /api/auth/register` | Inscription (`email`, `password`, `displayName`) | — |
+| `POST /api/auth/login` | Connexion (`email`, `password`) | — |
 | `GET /api/ai/models` | Classements modèles IA (OpenRouter) | 1h |
 
 ### Tester avec curl
@@ -97,10 +99,64 @@ curl http://localhost:3000/api/ai/models
 | Variable | Défaut | Description |
 |----------|--------|-------------|
 | `PORT` | `3000` | Port d'écoute |
-| `CORS_ORIGIN` | `http://localhost:5173` | Origine autorisée (frontend Vite) |
+| `CORS_ORIGIN` | `http://localhost:5173` | Origine frontend principale |
+| `ALLOWED_ORIGINS` | — | Domaines front additionnels, séparés par des virgules (ex. `https://app.example.com`) |
 | `OPENROUTER_API_KEY` | — | Clé API OpenRouter (requis pour `/api/ai/models`) |
+| `POSTGRES_USER` | `worldpulse` | Utilisateur PostgreSQL |
+| `POSTGRES_PASSWORD` | `worldpulse` | Mot de passe PostgreSQL |
+| `POSTGRES_DB` | `worldpulse` | Nom de la base |
+| `POSTGRES_PORT` | `5432` | Port PostgreSQL exposé sur l'hôte |
+| `DATABASE_URL` | — | Connexion PostgreSQL (`localhost:5432` avec Docker DB) |
+| `JWT_SECRET` | — | Secret pour signer les tokens JWT (requis pour `/api/auth/*`) |
+| `LOG_LEVEL` | `debug` | Niveau de logs (`trace`, `debug`, `info`, `warn`, `error`) |
 
 Le fichier `.env` à la racine est chargé automatiquement au démarrage.
+
+## Docker (PostgreSQL uniquement)
+
+La base tourne dans Docker, l'API en local avec `npm run dev`.
+
+```bash
+# Terminal 1 — PostgreSQL
+docker compose up -d
+
+# Terminal 2 — API
+npm run dev
+```
+
+- **PostgreSQL** → `localhost:5432` (user/pass/db : `worldpulse`)
+- **API** → `http://localhost:3000`
+
+Vérifier :
+```bash
+curl http://localhost:3000/health
+# {"status":"ok","db":"connected"}
+```
+
+Arrêter la base :
+```bash
+docker compose down
+```
+
+Supprimer les données PostgreSQL :
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+> `docker compose down -v` est nécessaire pour relancer les scripts SQL d'init (volume PostgreSQL recréé).
+
+### Structure PostgreSQL (dans ton client SQL)
+
+```
+PostgreSQL          ← le serveur (Docker)
+└── worldpulse      ← la base de données
+    └── Schemas
+        ├── public       ← schéma par défaut PostgreSQL
+        └── worldpulse   ← schéma applicatif (nos tables)
+```
+
+Les fichiers SQL du projet sont dans `db/schema/` et s'appliquent au premier démarrage Docker.
 
 ## Scripts
 
@@ -165,5 +221,6 @@ src/
 | Code | Corps |
 |------|-------|
 | `404` | `{ "error": "Not found" }` |
+| `403` | `{ "error": "Origin not allowed" }` — provenance non autorisée |
 | `502` | `{ "error": "<message>" }` — échec fetch externe |
 | `503` | `{ "error": "Set OPENROUTER_API_KEY..." }` — clé manquante |
